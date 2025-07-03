@@ -1,60 +1,81 @@
+
 #include <iostream>
 #include <fstream>
 #include <cstring>
 #include <vector>
+#include <algorithm>
 using namespace std;
 
 #define SIZE 20
 
 class Contact {
-public:
+private:
     string name;
     string number;
     int id;
+
+public:
     Contact* next;
     Contact* prev;
 
-    Contact(string _name, string _number, int _id) {
-        name = _name;
-        number = _number;
-        id = _id;
-        next = nullptr;
-        prev = nullptr;
+    Contact(string _name, string _number, int _id)
+        : name(_name), number(_number), id(_id), next(nullptr), prev(nullptr) {}
+
+    string getName() const { return name; }
+    string getNumber() const { return number; }
+    int getId() const { return id; }
+
+    void setName(const string& newName) { name = newName; }
+    void setNumber(const string& newNumber) { number = newNumber; }
+
+    void display() const {
+        cout << "Name: " << name << "\nNumber: " << number << "\nID: " << id << "\n";
+    }
+};
+
+class CallHistory {
+private:
+    vector<int> stack;
+
+public:
+    void push(int id) {
+        if (stack.size() < SIZE) {
+            stack.push_back(id);
+        } else {
+            cout << "Call history is full. Oldest entry will be removed.\n";
+            stack.erase(stack.begin());
+            stack.push_back(id);
+        }
+    }
+
+    void pop() {
+        if (!stack.empty()) {
+            stack.pop_back();
+            cout << "LATEST CALL FROM HISTORY DELETED\n";
+        } else {
+            cout << "Call history is already empty.\n";
+        }
+    }
+
+    vector<int> getHistory() const {
+        return stack;
     }
 };
 
 class ContactManager {
 private:
     Contact* head;
-    vector<int> callHistory;
-    int dummyId = 1001;
+    int dummyId;
+    CallHistory callHistory;
 
 public:
-    ContactManager() {
-        head = nullptr;
-    }
+    ContactManager() : head(nullptr), dummyId(1001) {}
 
-    bool isCallHistoryEmpty() {
-        return callHistory.empty();
-    }
-
-    bool isCallHistoryFull() {
-        return callHistory.size() == SIZE;
-    }
-
-    void pushToCallHistory(int id) {
-        if (!isCallHistoryFull())
-            callHistory.push_back(id);
-        else
-            cout << "Call history is full.\n";
-    }
-
-    void popFromCallHistory() {
-        if (!isCallHistoryEmpty()) {
-            callHistory.pop_back();
-            cout << "LATEST CALL FROM HISTORY DELETED\n";
-        } else {
-            cout << "Call history is already empty.\n";
+    ~ContactManager() {
+        while (head) {
+            Contact* temp = head;
+            head = head->next;
+            delete temp;
         }
     }
 
@@ -79,56 +100,31 @@ public:
         ofstream outFile("contact_backend.txt", ios::app);
         outFile << name << "\n" << number << "\n\n";
         outFile.close();
+        cout << "Contact saved successfully!\n";
     }
 
-    void printAllContacts() {
+    void displayAllContacts() const {
+        if (!head) {
+            cout << "No contacts available.\n";
+            return;
+        }
         Contact* temp = head;
         while (temp) {
-            cout << "\n" << temp->name << "\n" << temp->number << "\n";
+            temp->display();
+            cout << "------------------\n";
             temp = temp->next;
         }
     }
 
-    void displayCallHistory() {
-        for (int i = callHistory.size() - 1; i >= 0; --i) {
-            int id = callHistory[i];
-            Contact* temp = head;
-            while (temp) {
-                if (temp->id == id) {
-                    cout << "called: " << temp->name << endl;
-                    break;
-                }
-                temp = temp->next;
-            }
-        }
-    }
-
-    void callContact() {
-        string name;
-        cout << "Enter the contact name to call: ";
-        cin >> name;
-        Contact* temp = head;
-        while (temp) {
-            if (temp->name == name) {
-                pushToCallHistory(temp->id);
-                cout << "Calling " << temp->name << "...\n";
-                return;
-            }
-            temp = temp->next;
-        }
-        cout << "NO MATCHING CONTACTS FOUND\n";
-    }
-
-    void searchContact() {
+    void searchContact() const {
         string key;
         cout << "ENTER THE KEY TO SEARCH FOR CONTACTS: ";
         cin >> key;
         Contact* temp = head;
         bool found = false;
-        cout << "CONTACTS MATCHING WITH KEY ARE:\n";
         while (temp) {
-            if (temp->name.find(key) == 0) {
-                cout << temp->name << "\n" << temp->number << "\n";
+            if (temp->getName().find(key) == 0) {
+                temp->display();
                 found = true;
             }
             temp = temp->next;
@@ -138,31 +134,13 @@ public:
         }
     }
 
-    void backupFile() {
-        ifstream inFile("contact_backend.txt");
-        string line;
-        while (getline(inFile, line)) {
-            cout << line << "\n";
-        }
-        inFile.close();
-        cout << "END OF LIST OF CONTACTS\n";
-    }
-
-    void printContactIDs() {
-        Contact* temp = head;
-        while (temp) {
-            cout << temp->id << "\n";
-            temp = temp->next;
-        }
-    }
-
     void deleteContact() {
         string name;
         cout << "Enter the contact you want to delete: ";
         cin >> name;
         Contact* temp = head;
         while (temp) {
-            if (temp->name == name) {
+            if (temp->getName() == name) {
                 if (temp == head) {
                     head = temp->next;
                     if (head) head->prev = nullptr;
@@ -178,39 +156,94 @@ public:
         }
         cout << "Contact not found.\n";
     }
+
+    void callContact() {
+        string name;
+        cout << "Enter the contact name to call: ";
+        cin >> name;
+        Contact* temp = head;
+        while (temp) {
+            if (temp->getName() == name) {
+                callHistory.push(temp->getId());
+                cout << "Calling " << name << "...\n";
+                return;
+            }
+            temp = temp->next;
+        }
+        cout << "NO MATCHING CONTACTS FOUND\n";
+    }
+
+    void displayCallHistory() const {
+        vector<int> history = callHistory.getHistory();
+        if (history.empty()) {
+            cout << "No call history found.\n";
+            return;
+        }
+
+        for (int i = history.size() - 1; i >= 0; --i) {
+            Contact* temp = head;
+            while (temp) {
+                if (temp->getId() == history[i]) {
+                    cout << "Called: " << temp->getName() << "\n";
+                    break;
+                }
+                temp = temp->next;
+            }
+        }
+    }
+
+    void deleteLatestCall() {
+        callHistory.pop();
+    }
+
+    void backupContacts() const {
+        ifstream inFile("contact_backend.txt");
+        string line;
+        while (getline(inFile, line)) {
+            cout << line << "\n";
+        }
+        inFile.close();
+        cout << "END OF LIST OF CONTACTS\n";
+    }
+
+    void showMenu() {
+        cout << "\n=========== DigiDex Pro – Smart Contact Manager ===========\n";
+        cout << "1. Create New Contact\n";
+        cout << "2. Search for a Contact\n";
+        cout << "3. View All Contacts\n";
+        cout << "4. View Call History\n";
+        cout << "5. Delete a Contact\n";
+        cout << "6. Call a Contact\n";
+        cout << "7. Delete Latest Call from History\n";
+        cout << "8. Backup Contact File\n";
+        cout << "9. Exit\n";
+    }
+
+    void run() {
+        int choice;
+        while (true) {
+            showMenu();
+            cout << "Choose an option: ";
+            cin >> choice;
+            switch (choice) {
+                case 1: createContact(); break;
+                case 2: searchContact(); break;
+                case 3: displayAllContacts(); break;
+                case 4: displayCallHistory(); break;
+                case 5: deleteContact(); break;
+                case 6: callContact(); break;
+                case 7: deleteLatestCall(); break;
+                case 8: backupContacts(); break;
+                case 9: cout << "Exiting DigiDex Pro. Thank you!\n"; return;
+                default: cout << "Invalid option! Try again.\n"; break;
+            }
+        }
+    }
 };
 
 int main() {
-    ContactManager cm;
-    int opt;
-
-    cout << "PLEASE SELECT FROM THE BELOW MENU:\n";
-    cout << "1. CREATE NEW CONTACT\n";
-    cout << "2. SEARCH FOR A CONTACT\n";
-    cout << "3. VIEW ALL CONTACTS\n";
-    cout << "4. VIEW CALL HISTORY\n";
-    cout << "5. DELETE A CONTACT\n";
-    cout << "6. CALL A CONTACT\n";
-    cout << "7. DELETE LATEST CALL FROM HISTORY\n";
-    cout << "8. BACKUP CONTACT FILE\n";
-    cout << "9. PRINT CONTACT IDs\n";
-    cout << "10. EXIT\n";
-
-    while (true) {
-        cout << "\nOPTION: ";
-        cin >> opt;
-        switch (opt) {
-            case 1: cm.createContact(); break;
-            case 2: cm.searchContact(); break;
-            case 3: cm.printAllContacts(); break;
-            case 4: cm.displayCallHistory(); break;
-            case 5: cm.deleteContact(); break;
-            case 6: cm.callContact(); break;
-            case 7: cm.popFromCallHistory(); break;
-            case 8: cm.backupFile(); break;
-            case 9: cm.printContactIDs(); break;
-            case 10: cout << "YOU HAVE EXITED THE PROGRAM!\n"; return 0;
-            default: cout << "WRONG OPTION!\n"; break;
-        }
-    }
+    ContactManager manager;
+    manager.run();
+    return 0;
 }
+
